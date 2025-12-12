@@ -120,7 +120,7 @@ python -m src.infer_video --source 0 --conf 0.35 --iou 0.5
 
 Here's a demonstration of the model detecting pedestrians in a video:
 
-<video src="assets/results.webm" controls width="100%"></video>
+![Results](assets/results.gif)
 
 The model successfully detects pedestrians with bounding boxes and confidence scores, running in real-time on both CPU and GPU.
 
@@ -216,13 +216,6 @@ The conversion process:
 ### 4. Use Engine in Streamlit App
 
 The Streamlit app (`app.py`) automatically detects and supports `.engine` files. Simply place your `.engine` file in the `runs/` directory and select it from the model dropdown.
-
-## 📚 Learning Resources
-
-- **Model Architecture**: See `src/model.py` for the CNN backbone and detection head
-- **Training Process**: `src/train.py` shows the complete training loop
-- **Loss Function**: `src/loss.py` implements YOLOv1-style multi-task loss
-- **Data Pipeline**: `src/dataset.py` demonstrates mask-to-box conversion and YOLO target building
 
 ## 🤝 Contributing
 
