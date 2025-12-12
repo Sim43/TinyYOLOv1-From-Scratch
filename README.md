@@ -121,11 +121,11 @@ python -m src.infer_video --source 0 --conf 0.35 --iou 0.5
 Here's a demonstration of the model detecting pedestrians in a video:
 
 <div align="center">
-  <img src="assets/results.gif" alt="Results">
+  <img src="assets/results.gif" alt="Results" style="width: 800px;">
 </div>
 
 <div align="center">
-  <img src="assets/results.png" alt="Results">
+  <img src="assets/results.png" alt="Results" style="width: 800px;">
 </div>
 
 The model successfully detects pedestrians with bounding boxes and confidence scores, running in real-time on both CPU and GPU.
