@@ -174,6 +174,11 @@ def read_video_frames(video_path: Path):
 def bgr_to_rgb(frame_bgr: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
+def bgr_to_pil(frame_bgr: np.ndarray) -> Image.Image:
+    """Convert BGR numpy array to PIL Image for stable Streamlit display."""
+    rgb = bgr_to_rgb(frame_bgr)
+    return Image.fromarray(rgb)
+
 
 # --------------------------- UI ---------------------------
 
@@ -244,7 +249,7 @@ def main() -> None:
             return
         dt = (time.perf_counter() - t0) * 1000
 
-        out_ph.image(bgr_to_rgb(out), use_container_width=True)
+        out_ph.image(bgr_to_pil(out), use_container_width=True)
         status_ph.success(f"Done. Inference: {dt:.1f} ms")
         return
 
@@ -257,13 +262,21 @@ def main() -> None:
         try:
             for frame in read_video_frames(tmp_path):
                 frames += 1
-                input_ph.image(bgr_to_rgb(frame), caption=f"Frame {frames}", use_container_width=True)
+                try:
+                    input_ph.image(bgr_to_pil(frame), caption=f"Frame {frames}", use_container_width=True)
+                except Exception:
+                    # Fallback if image display fails
+                    pass
 
                 t0 = time.perf_counter()
                 out = runner.infer_bgr(frame)
                 infer_ms = (time.perf_counter() - t0) * 1000
 
-                out_ph.image(bgr_to_rgb(out), use_container_width=True)
+                try:
+                    out_ph.image(bgr_to_pil(out), use_container_width=True)
+                except Exception:
+                    # Fallback if image display fails
+                    pass
 
                 if show_fps:
                     elapsed = time.perf_counter() - t_start
