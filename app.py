@@ -19,7 +19,6 @@ import cv2
 import numpy as np
 import streamlit as st
 import torch
-from PIL import Image
 
 from src.model import TinyYOLOv1
 from src.utils import decode_predictions, nms_normalized
@@ -160,24 +159,9 @@ def save_uploaded_file(uploaded_file) -> Path:
         tmp.write(uploaded_file.getbuffer())
         return Path(tmp.name)
 
-def read_video_frames(video_path: Path):
-    cap = cv2.VideoCapture(str(video_path))
-    try:
-        while cap.isOpened():
-            ok, frame = cap.read()
-            if not ok:
-                break
-            yield frame
-    finally:
-        cap.release()
-
 def bgr_to_rgb(frame_bgr: np.ndarray) -> np.ndarray:
+    """Convert BGR to RGB using OpenCV (same as infer_video.py)."""
     return cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-
-def bgr_to_pil(frame_bgr: np.ndarray) -> Image.Image:
-    """Convert BGR numpy array to PIL Image for stable Streamlit display."""
-    rgb = bgr_to_rgb(frame_bgr)
-    return Image.fromarray(rgb)
 
 
 # --------------------------- UI ---------------------------
@@ -194,6 +178,8 @@ def main() -> None:
         conf = st.slider("Confidence", 0.0, 1.0, 0.35, 0.01)
         iou = st.slider("NMS IoU", 0.0, 1.0, 0.50, 0.01)
         show_fps = st.checkbox("Show FPS (video)", value=True)
+        display_interval = st.slider("Display update interval (frames)", 1, 10, 3, 1, 
+                                     help="Update UI every N frames. Lower = smoother but slower. Higher = faster processing.")
 
     models = list_models()
     if not models:
@@ -236,11 +222,19 @@ def main() -> None:
 
     # ---------------- image ----------------
     if suffix in SUPPORTED_IMAGE_EXTS:
+        # Read image using OpenCV (same method as infer_video.py)
         uploaded.seek(0)
-        pil = Image.open(uploaded).convert("RGB")
-        input_ph.image(pil, use_container_width=True)
+        file_bytes = np.asarray(bytearray(uploaded.read()), dtype=np.uint8)
+        frame_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        if frame_bgr is None:
+            st.error("Failed to decode image.")
+            return
+        
+        # Display input using OpenCV RGB conversion
+        input_rgb = bgr_to_rgb(frame_bgr)
+        input_ph.image(input_rgb, use_container_width=True, channels="RGB")
 
-        frame_bgr = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+        # Inference (same as infer_video.py)
         t0 = time.perf_counter()
         try:
             out = runner.infer_bgr(frame_bgr)
@@ -249,7 +243,9 @@ def main() -> None:
             return
         dt = (time.perf_counter() - t0) * 1000
 
-        out_ph.image(bgr_to_pil(out), use_container_width=True)
+        # Display output using OpenCV RGB conversion
+        output_rgb = bgr_to_rgb(out)
+        out_ph.image(output_rgb, use_container_width=True, channels="RGB")
         status_ph.success(f"Done. Inference: {dt:.1f} ms")
         return
 
@@ -258,37 +254,50 @@ def main() -> None:
         tmp_path = save_uploaded_file(uploaded)
         frames = 0
         t_start = time.perf_counter()
+        # Update display every N frames to reduce UI overhead (similar to infer_video speed)
 
         try:
-            for frame in read_video_frames(tmp_path):
-                frames += 1
-                try:
-                    input_ph.image(bgr_to_pil(frame), caption=f"Frame {frames}", use_container_width=True)
-                except Exception:
-                    # Fallback if image display fails
-                    pass
+            # Use OpenCV VideoCapture (same as infer_video.py)
+            cap = cv2.VideoCapture(str(tmp_path))
+            if not cap.isOpened():
+                st.error("Cannot open video source")
+                return
 
-                t0 = time.perf_counter()
-                out = runner.infer_bgr(frame)
-                infer_ms = (time.perf_counter() - t0) * 1000
+            try:
+                while True:
+                    ok, frame = cap.read()
+                    if not ok:
+                        break
+                    
+                    frames += 1
+                    
+                    # Inference (same as infer_video.py)
+                    t0 = time.perf_counter()
+                    out = runner.infer_bgr(frame)
+                    infer_ms = (time.perf_counter() - t0) * 1000
 
-                try:
-                    out_ph.image(bgr_to_pil(out), use_container_width=True)
-                except Exception:
-                    # Fallback if image display fails
-                    pass
+                    # Only update UI every N frames to reduce overhead
+                    if frames % display_interval == 0 or frames == 1:
+                        # Use OpenCV RGB conversion (same as infer_video.py)
+                        input_rgb = bgr_to_rgb(frame)
+                        output_rgb = bgr_to_rgb(out)
+                        input_ph.image(input_rgb, caption=f"Frame {frames}", use_container_width=True, channels="RGB")
+                        out_ph.image(output_rgb, use_container_width=True, channels="RGB")
 
-                if show_fps:
-                    elapsed = time.perf_counter() - t_start
-                    fps = frames / elapsed if elapsed > 0 else 0.0
-                    status_ph.info(f"FPS: {fps:.2f} | Inference: {infer_ms:.1f} ms")
+                    # Update FPS more frequently for accurate display
+                    if show_fps and (frames % display_interval == 0 or frames == 1):
+                        elapsed = time.perf_counter() - t_start
+                        fps = frames / elapsed if elapsed > 0 else 0.0
+                        status_ph.info(f"FPS: {fps:.2f} | Inference: {infer_ms:.1f} ms | Frame: {frames}")
+            finally:
+                cap.release()
         finally:
             try:
                 tmp_path.unlink(missing_ok=True)
             except Exception:
                 pass
 
-        status_ph.success("Video done.")
+        status_ph.success(f"Video done. Processed {frames} frames.")
         return
 
     st.error(f"Unsupported file type: {uploaded.name}")
