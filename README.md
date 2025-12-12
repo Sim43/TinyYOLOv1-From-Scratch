@@ -124,6 +124,10 @@ Here's a demonstration of the model detecting pedestrians in a video:
   <img src="assets/results.gif" alt="Results">
 </div>
 
+<div align="center">
+  <img src="assets/results.png" alt="Results">
+</div>
+
 The model successfully detects pedestrians with bounding boxes and confidence scores, running in real-time on both CPU and GPU.
 
 ## 📁 Project Structure
